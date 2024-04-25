@@ -1,1 +1,6 @@
 VideoMAE_pretrained_ckpts/
+annotations/
+checkpoints/
+log/
+VidMAE/
+__pycache__/

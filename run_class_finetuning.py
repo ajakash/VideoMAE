@@ -9,6 +9,7 @@ import os
 from functools import partial
 from pathlib import Path
 from collections import OrderedDict
+import ipdb
 
 from mixup import Mixup
 from timm.models import create_model
@@ -147,7 +148,8 @@ def get_args():
     parser.add_argument('--num_segments', type=int, default= 1)
     parser.add_argument('--num_frames', type=int, default= 16)
     parser.add_argument('--sampling_rate', type=int, default= 4)
-    parser.add_argument('--data_set', default='Kinetics-400', choices=['Kinetics-400', 'SSV2', 'UCF101', 'HMDB51','image_folder'],
+    parser.add_argument('--data_set', default='Kinetics-400',
+                        choices=['Kinetics-400', 'SSV2', 'UCF101', 'HMDB51', 'MOMA_sact', 'MOMA_act', 'image_folder'],
                         type=str, help='dataset')
     parser.add_argument('--output_dir', default='',
                         help='path where to save, empty for no saving')
@@ -206,7 +208,9 @@ def get_args():
 
 
 def main(args, ds_init):
-    utils.init_distributed_mode(args)
+    # Uncomment for distributed training
+    # utils.init_distributed_mode(args)
+    args.distributed = False
 
     if ds_init is not None:
         utils.create_ds_config(args)
@@ -248,6 +252,7 @@ def main(args, ds_init):
             dataset_test, num_replicas=num_tasks, rank=global_rank, shuffle=False)
     else:
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+        sampler_test = torch.utils.data.SequentialSampler(dataset_test)
 
     if global_rank == 0 and args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
@@ -320,7 +325,7 @@ def main(args, ds_init):
     print("Patch size = %s" % str(patch_size))
     args.window_size = (args.num_frames // 2, args.input_size // patch_size[0], args.input_size // patch_size[1])
     args.patch_size = patch_size
-
+        
     if args.finetune:
         if args.finetune.startswith('https'):
             checkpoint = torch.hub.load_state_dict_from_url(
@@ -382,6 +387,7 @@ def main(args, ds_init):
                 new_pos_embed = torch.cat((extra_tokens, pos_tokens), dim=1)
                 checkpoint_model['pos_embed'] = new_pos_embed
 
+        # ipdb.set_trace()
         utils.load_state_dict(model, checkpoint_model, prefix=args.model_prefix)
 
     model.to(device)
