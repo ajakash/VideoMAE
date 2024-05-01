@@ -1,4 +1,12 @@
 #!/bin/bash
+#SBATCH --nodes=1 
+#SBATCH --gpus-per-node=v100l:4   
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=32    # There are 24 CPU cores on V100 Cedar GPU nodes
+#SBATCH --mem=0               # Request the full memory of the node
+#SBATCH --time=11:59:00
+#SBATCH --account=def-mori
+#SBATCH --output=log/slurm_output/slurm-%J.out
 
 # Set the path to save checkpoints
 OUTPUT_DIR='/home/aabdujyo/scratch/VideoMAE/checkpoints/MOMA_sact_default'
@@ -19,10 +27,11 @@ module load scipy-stack/2023b
 module load cuda
 
 python -c "import ipdb"
-python -c "import deepspeed"
 
 echo 'Starting to run the script!'
 
+# --master_port 12320 --nnodes=1  --node_rank=0 --master_addr=127.0.0.1 \
+# OMP_NUM_THREADS=1 
 # torchrun --standalone --nproc_per_node=4 \
 OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=4 \
     --master_port 12320 --nnodes=1  --node_rank=0 --master_addr=127.0.0.1 \
@@ -34,7 +43,7 @@ OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=4 \
     --finetune ${MODEL_PATH} \
     --log_dir ${LOG_DIR} \
     --output_dir ${OUTPUT_DIR} \
-    --batch_size 2 \
+    --batch_size 10 \
     --num_sample 2 \
     --input_size 224 \
     --short_side_size 224 \
@@ -45,7 +54,7 @@ OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=4 \
     --lr 5e-4 \
     --opt_betas 0.9 0.999 \
     --weight_decay 0.05 \
-    --epochs 5 \
+    --epochs 10 \
     --test_num_segment 5 \
     --test_num_crop 3 \
     --dist_eval #\

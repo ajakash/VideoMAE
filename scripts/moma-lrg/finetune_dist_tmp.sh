@@ -24,8 +24,9 @@ python -c "import deepspeed"
 echo 'Starting to run the script!'
 
 # torchrun --standalone --nproc_per_node=4 \
-OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=4 \
-    --master_port 12320 --nnodes=1  --node_rank=0 --master_addr=127.0.0.1 \
+# OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=4 \
+    # --master_port 12320 --nnodes=1  --node_rank=0 --master_addr=127.0.0.1 \
+torchrun --standalone --nproc_per_node=4 \
     run_class_finetuning.py \
     --num_workers 10 \
     --model vit_small_patch16_224 \
@@ -34,7 +35,7 @@ OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=4 \
     --finetune ${MODEL_PATH} \
     --log_dir ${LOG_DIR} \
     --output_dir ${OUTPUT_DIR} \
-    --batch_size 2 \
+    --batch_size 10 \
     --num_sample 2 \
     --input_size 224 \
     --short_side_size 224 \
@@ -48,7 +49,7 @@ OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=4 \
     --epochs 5 \
     --test_num_segment 5 \
     --test_num_crop 3 \
-    --dist_eval #\
-    # --enable_deepspeed 
+    --dist_eval \
+    --enable_deepspeed 
     # --data_path ${DATA_PATH} \
     # change num_wrokers for distributed training
