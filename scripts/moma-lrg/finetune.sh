@@ -11,6 +11,11 @@ MODEL_PATH='/home/aabdujyo/scratch/VideoMAE/VideoMAE_pretrained_ckpts/checkpoint
 # batch_size can be adjusted according to number of GPUs
 # this script is for 32 GPUs (4 nodes x 8 GPUs)
 
+source /home/aabdujyo/scratch/VideoMAE/VidMAE/bin/activate
+module load python/3.10
+module load scipy-stack/2023b
+module load cuda
+
 echo 'Starting to run the script!'
 
 # OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=8 \
@@ -23,21 +28,21 @@ python run_class_finetuning.py \
     --finetune ${MODEL_PATH} \
     --log_dir ${LOG_DIR} \
     --output_dir ${OUTPUT_DIR} \
-    --batch_size 10 \
+    --batch_size 2 \
     --num_sample 2 \
     --input_size 224 \
     --short_side_size 224 \
-    --save_ckpt_freq 10 \
+    --save_ckpt_freq 2 \
     --num_frames 16 \
     --sampling_rate 4 \
     --opt adamw \
     --lr 5e-4 \
     --opt_betas 0.9 0.999 \
     --weight_decay 0.05 \
-    --epochs 150 \
-    --test_num_segment 2 \
-    --test_num_crop 2 \
-    --eval #\
+    --epochs 5 \
+    --test_num_segment 5 \
+    --test_num_crop 3 \
+    # --eval #\
     # --dist_eval \
     # --enable_deepspeed 
     # --data_path ${DATA_PATH} \
