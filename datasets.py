@@ -68,7 +68,7 @@ def build_dataset(is_train, test_mode, args):
             mode = 'validation'
             anno_path = os.path.join(args.data_path, 'val.csv') 
 
-        dataset = VideoClsDataset(
+        f = VideoClsDataset(
             anno_path=anno_path,
             data_path='/',
             mode=mode,
@@ -117,6 +117,35 @@ def build_dataset(is_train, test_mode, args):
             args=args)
         nb_classes = 91
 
+    elif args.data_set == 'MOMA_sact_uniSampling':
+        mode = None
+        anno_path = None
+        if is_train is True:
+            mode = 'train'
+            anno_path = os.path.join('annotations/train_sact.csv')
+        elif test_mode is True:
+            mode = 'test'
+            anno_path = os.path.join('annotations/test_sact.csv')
+        else:  
+            mode = 'validation'
+            anno_path = os.path.join('annotations/val_sact.csv')
+
+        dataset = SSVideoClsDataset(
+            anno_path=anno_path,
+            data_path='/',
+            mode=mode,
+            clip_len=1,
+            num_segment=args.num_frames,
+            test_num_segment=args.test_num_segment,
+            test_num_crop=args.test_num_crop,
+            num_crop=1 if not test_mode else 3,
+            keep_aspect_ratio=True,
+            crop_size=args.input_size,
+            short_side_size=args.short_side_size,
+            new_height=256, #TODO: check this
+            new_width=320,
+            args=args)
+        nb_classes = 91
 
     elif args.data_set == 'SSV2':
         mode = None

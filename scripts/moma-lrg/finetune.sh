@@ -21,14 +21,14 @@ echo 'Starting to run the script!'
 # OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=8 \
 #     --master_port 12320 --nnodes=4  --node_rank=$1 --master_addr=$2 \
 python run_class_finetuning.py \
-    --num_workers 2 \
+    --num_workers 0 \
     --model vit_small_patch16_224 \
     --data_set MOMA_sact \
     --nb_classes 91 \
     --finetune ${MODEL_PATH} \
     --log_dir ${LOG_DIR} \
     --output_dir ${OUTPUT_DIR} \
-    --batch_size 2 \
+    --batch_size $1 \
     --num_sample 2 \
     --input_size 224 \
     --short_side_size 224 \
@@ -39,7 +39,7 @@ python run_class_finetuning.py \
     --lr 5e-4 \
     --opt_betas 0.9 0.999 \
     --weight_decay 0.05 \
-    --epochs 5 \
+    --epochs $2 \
     --test_num_segment 5 \
     --test_num_crop 3 \
     # --eval #\
