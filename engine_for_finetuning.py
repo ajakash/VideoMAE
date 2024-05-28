@@ -195,7 +195,7 @@ def final_test(data_loader, model, device, file):
         split_nb = batch[4]
         videos = videos.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
-
+        # print(videos.size(), target.size(), chunk_nb, split_nb)
         # compute output
         with torch.cuda.amp.autocast():
             output = model(videos)

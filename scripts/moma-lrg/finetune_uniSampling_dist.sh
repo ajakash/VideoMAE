@@ -1,9 +1,9 @@
 # Set the path to save checkpoints
-OUTPUT_DIR='/home/aabdujyo/scratch/VideoMAE/checkpoints/MOMA_sact_uniSampling'
+OUTPUT_DIR='/home/aabdujyo/scratch/VideoMAE/checkpoints/'$1
 # path to Kinetics set (train.csv/val.csv/test.csv)
-LOG_DIR='/home/aabdujyo/scratch/VideoMAE/log/MOMA_sact_uniSampling'
+LOG_DIR='/home/aabdujyo/scratch/VideoMAE/log/'$1
 # path to pretrain model
-MODEL_PATH='/home/aabdujyo/scratch/VideoMAE/VideoMAE_pretrained_ckpts/checkpoint_ViT-S_SS_ep2400.pth'
+MODEL_PATH='/home/aabdujyo/scratch/VideoMAE/VideoMAE_pretrained_ckpts/checkpoint_ViT-B_SS_ep2400.pth'
 
 # We add repeated_aug (--num_sample = 2) on Kinetics-400 here, 
 # which could better performance while need more time for fine-tuning
@@ -24,24 +24,23 @@ OMP_NUM_THREADS=1 CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launc
     --master_port 12321 \
     run_class_finetuning.py \
     --num_workers 10 \
-    --model vit_small_patch16_224 \
+    --model vit_base_patch16_224 \
+    --batch_size 4 \
+    --epochs 150 \
+    --num_sample 1 \
     --data_set MOMA_sact_uniSampling \
     --nb_classes 91 \
     --finetune ${MODEL_PATH} \
     --log_dir ${LOG_DIR} \
     --output_dir ${OUTPUT_DIR} \
-    --batch_size 10 \
-    --num_sample 2 \
     --input_size 224 \
     --short_side_size 224 \
-    --save_ckpt_freq 2 \
+    --save_ckpt_freq 10 \
     --num_frames 16 \
-    --sampling_rate 4 \
     --opt adamw \
     --lr 5e-4 \
     --opt_betas 0.9 0.999 \
     --weight_decay 0.05 \
-    --epochs 10 \
     --test_num_segment 5 \
     --test_num_crop 3 \
     --distributed \

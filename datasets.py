@@ -134,7 +134,8 @@ def build_dataset(is_train, test_mode, args):
             anno_path=anno_path,
             data_path='/',
             mode=mode,
-            clip_len=1,
+            clip_len=args.num_frames,       # updated for use in ssv2.py test sampling 
+            frame_sample_rate=args.sampling_rate,    # updated for use in ssv2.py test sampling
             num_segment=args.num_frames,
             test_num_segment=args.test_num_segment,
             test_num_crop=args.test_num_crop,

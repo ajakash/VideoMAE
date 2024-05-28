@@ -39,7 +39,7 @@ OMP_NUM_THREADS=1 CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launc
     --log_dir ${LOG_DIR} \
     --output_dir ${OUTPUT_DIR} \
     --batch_size 10 \
-    --num_sample 2 \
+    --num_sample 1 \
     --input_size 224 \
     --short_side_size 224 \
     --save_ckpt_freq 2 \
@@ -49,7 +49,7 @@ OMP_NUM_THREADS=1 CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launc
     --lr 5e-4 \
     --opt_betas 0.9 0.999 \
     --weight_decay 0.05 \
-    --epochs 5 \
+    --epochs 100 \
     --test_num_segment 5 \
     --test_num_crop 3 \
     --distributed \

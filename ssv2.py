@@ -15,6 +15,7 @@ class SSVideoClsDataset(Dataset):
     """Load your own video classification dataset."""
 
     def __init__(self, anno_path, data_path, mode='train', clip_len=8,
+                frame_sample_rate=2,
                 crop_size=224, short_side_size=256, new_height=256,
                 new_width=340, keep_aspect_ratio=True, num_segment=1,
                 num_crop=1, test_num_segment=10, test_num_crop=3, args=None):
@@ -22,6 +23,7 @@ class SSVideoClsDataset(Dataset):
         self.data_path = data_path
         self.mode = mode
         self.clip_len = clip_len
+        self.frame_sample_rate=frame_sample_rate
         self.crop_size = crop_size
         self.short_side_size = short_side_size
         self.new_height = new_height
@@ -138,13 +140,21 @@ class SSVideoClsDataset(Dataset):
 
             spatial_step = 1.0 * (max(buffer.shape[1], buffer.shape[2]) - self.short_side_size) \
                                 / (self.test_num_crop - 1)
-            temporal_start = chunk_nb # 0/1
+            temporal_step = max(1.0 * (buffer.shape[0] - self.clip_len) \
+                                / (self.test_num_segment - 1), 0)
+            temporal_start = int(chunk_nb * temporal_step)
+            # temporal_start = chunk_nb # 0/1
+            # ipdb.set_trace()
             spatial_start = int(split_nb * spatial_step)
             if buffer.shape[1] >= buffer.shape[2]:
-                buffer = buffer[temporal_start::2, \
+                # buffer = buffer[temporal_start::2, \
+                #        spatial_start:spatial_start + self.short_side_size, :, :]
+                buffer = buffer[temporal_start:temporal_start + self.clip_len, \
                        spatial_start:spatial_start + self.short_side_size, :, :]
             else:
-                buffer = buffer[temporal_start::2, \
+                # buffer = buffer[temporal_start::2, \
+                #        :, spatial_start:spatial_start + self.short_side_size, :]
+                buffer = buffer[temporal_start:temporal_start + self.clip_len, \
                        :, spatial_start:spatial_start + self.short_side_size, :]
 
             buffer = self.data_transform(buffer)
@@ -237,13 +247,18 @@ class SSVideoClsDataset(Dataset):
             return []
 
         if self.mode == 'test':
-            all_index = []
-            tick = len(vr) / float(self.num_segment)
-            all_index = list(np.array([int(tick / 2.0 + tick * x) for x in range(self.num_segment)] +
-                               [int(tick * x) for x in range(self.num_segment)]))
-            while len(all_index) < (self.num_segment * self.test_num_segment):
+            # all_index = []
+            # tick = len(vr) / float(self.num_segment)
+            # all_index = list(np.array([int(tick / 2.0 + tick * x) for x in range(self.num_segment)] +
+            #                    [int(tick * x) for x in range(self.num_segment)]))
+            # while len(all_index) < (self.num_segment * self.test_num_segment):
+            #     all_index.append(all_index[-1])
+            # all_index = list(np.sort(np.array(all_index))) 
+            # vr.seek(0)
+            # buffer = vr.get_batch(all_index).asnumpy()
+            all_index = [x for x in range(0, len(vr), self.frame_sample_rate)]
+            while len(all_index) < self.clip_len:
                 all_index.append(all_index[-1])
-            all_index = list(np.sort(np.array(all_index))) 
             vr.seek(0)
             buffer = vr.get_batch(all_index).asnumpy()
             return buffer
