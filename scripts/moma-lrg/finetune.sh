@@ -41,7 +41,7 @@ python run_class_finetuning.py \
     --opt_betas 0.9 0.999 \
     --weight_decay 0.05 \
     --test_num_segment 5 \
-    --test_num_crop 3 \
+    --test_num_crop 3 #\
     # --eval #\
     # --dist_eval \
     # --enable_deepspeed 

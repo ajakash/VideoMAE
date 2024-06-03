@@ -1,4 +1,5 @@
 import os
+import ipdb
 import numpy as np
 import math
 import sys
@@ -199,6 +200,7 @@ def final_test(data_loader, model, device, file):
         # compute output
         with torch.cuda.amp.autocast():
             output = model(videos)
+            # ipdb.set_trace()
             loss = criterion(output, target)
 
         for i in range(output.size(0)):

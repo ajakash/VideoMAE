@@ -1,7 +1,7 @@
 # Set the path to save checkpoints
-OUTPUT_DIR='/home/aabdujyo/scratch/VideoMAE/checkpoints/'$1
+OUTPUT_DIR='/home/aabdujyo/scratch/VideoMAE/checkpoints/sact_uniSpl_B'
 # path to Kinetics set (train.csv/val.csv/test.csv)
-LOG_DIR='/home/aabdujyo/scratch/VideoMAE/log/'$1
+LOG_DIR='/home/aabdujyo/scratch/VideoMAE/log/sact_uniSpl_B'
 # path to pretrain model
 MODEL_PATH='/home/aabdujyo/scratch/VideoMAE/VideoMAE_pretrained_ckpts/checkpoint_ViT-B_SS_ep2400.pth'
 
