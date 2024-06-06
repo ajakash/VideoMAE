@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Set the path to save checkpoints
-OUTPUT_DIR='/home/aabdujyo/scratch/VideoMAE/checkpoints/MOMA_sact_default'
+OUTPUT_DIR='/home/aabdujyo/scratch/VideoMAE/checkpoints/sact_defSpl_S'
 # path to Kinetics set (train.csv/val.csv/test.csv)
-LOG_DIR='/home/aabdujyo/scratch/VideoMAE/log/MOMA_sact_default'
+LOG_DIR='/home/aabdujyo/scratch/VideoMAE/log/sact_defSpl_S'
 # path to pretrain model
 MODEL_PATH='/home/aabdujyo/scratch/VideoMAE/VideoMAE_pretrained_ckpts/checkpoint_ViT-S_K400_ep1600.pth'
 # MODEL_PATH='/home/aabdujyo/scratch/VideoMAE/VideoMAE_pretrained_ckpts/checkpoint_ViT-B_K400_ep1600.pth'
@@ -33,13 +33,14 @@ OMP_NUM_THREADS=1 CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launc
     run_class_finetuning.py \
     --num_workers 10 \
     --model vit_small_patch16_224 \
+    --batch_size 10 \
+    --epochs 150 \
+    --num_sample 1 \
     --data_set MOMA_sact \
     --nb_classes 91 \
     --finetune ${MODEL_PATH} \
     --log_dir ${LOG_DIR} \
     --output_dir ${OUTPUT_DIR} \
-    --batch_size 10 \
-    --num_sample 1 \
     --input_size 224 \
     --short_side_size 224 \
     --save_ckpt_freq 2 \
@@ -49,7 +50,6 @@ OMP_NUM_THREADS=1 CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launc
     --lr 5e-4 \
     --opt_betas 0.9 0.999 \
     --weight_decay 0.05 \
-    --epochs 100 \
     --test_num_segment 5 \
     --test_num_crop 3 \
     --distributed \
