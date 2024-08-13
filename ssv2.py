@@ -284,6 +284,253 @@ class SSVideoClsDataset(Dataset):
         else:
             return len(self.test_dataset)
 
+class VideoBoxClsDataset(Dataset):
+    """Copy of SSVideoClsDataset with
+    box data added to it"""
+
+    def __init__(self, anno_path, box_data_path, data_path, mode='train', clip_len=8,
+                frame_sample_rate=2,
+                crop_size=224, short_side_size=256, new_height=256,
+                new_width=340, keep_aspect_ratio=True, num_segment=1,
+                num_crop=1, test_num_segment=10, test_num_crop=3, args=None):
+        self.anno_path = anno_path
+        self.box_dataset = torch.load(box_data_path)
+        self.data_path = data_path
+        self.mode = mode
+        self.clip_len = clip_len
+        self.frame_sample_rate=frame_sample_rate
+        self.crop_size = crop_size
+        self.short_side_size = short_side_size
+        self.new_height = new_height
+        self.new_width = new_width
+        self.keep_aspect_ratio = keep_aspect_ratio
+        self.num_segment = num_segment
+        self.test_num_segment = test_num_segment
+        self.num_crop = num_crop
+        self.test_num_crop = test_num_crop
+        self.args = args
+        self.aug = False
+        self.rand_erase = False
+        if self.mode in ['train']:
+            self.aug = True
+            if self.args.reprob > 0:
+                self.rand_erase = True
+        if VideoReader is None:
+            raise ImportError("Unable to import `decord` which is required to read videos.")
+
+        import pandas as pd
+        cleaned = pd.read_csv(self.anno_path, header=None, delimiter=' ')
+        self.dataset_samples = list(cleaned.values[:, 0])
+        self.label_array = list(cleaned.values[:, 1])
+
+        # Remove dataset samples where number of bounding boxes across action < 10
+        ipdb.set_trace()
+        # TODO: Check if the function works correctly
+        # eg: see self.dataset_samples and self.label_array counts, values before and after
+        self.trim_dataset()
+
+        if (mode == 'train'):
+            pass
+
+        elif (mode == 'validation'):
+            self.data_transform = video_transforms.Compose([
+                video_transforms.Resize(self.short_side_size, interpolation='bilinear'),
+                video_transforms.CenterCrop(size=(self.crop_size, self.crop_size)),
+                volume_transforms.ClipToTensor(),
+                video_transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                        std=[0.229, 0.224, 0.225])
+            ])
+
+    def trim_dataset(self):
+        # indices = []
+        # for i, sample in enumerate(self.dataset_samples):
+        #     video_fname = sample.split('/')[-1]
+        #     if video_fname not in self.box_dataset.keys():
+        #         indices.append(i)
+
+        indices = [i for i, sample in enumerate(self.dataset_samples) \
+                   if sample.split('/')[-1] not in self.box_dataset.keys()]
+
+        for index in sorted(indices, reverse=True):
+            del self.dataset_samples[index]
+            del self.label_array[index]
+
+    def __getitem__(self, index):
+        # Get box details
+        video_fname = self.dataset_samples[index].split('/')[-1]
+        # Bbox: [frame_num(one-hot), x, y, width, height, class(one-hot)]
+        #       (1142, 289) 
+        #        1142 = Max number of bounding boxes per subactivity
+        #        289 = 32   + 4 +   (26 + 227)
+        bbox_set = self.box_dataset[video_fname][0] # (1142, 289)
+        bbox_mask = self.box_dataset[video_fname][1] # (1142)
+        label_from_bbox_data = self.box_dataset[video_fname][2] # (1)
+
+        if self.mode == 'train':
+            args = self.args 
+            scale_t = 1
+
+            sample = self.dataset_samples[index]  
+            buffer = self.loadvideo_decord(sample, sample_rate_scale=scale_t) # T H W C
+            if len(buffer) == 0:
+                while len(buffer) == 0:
+                    warnings.warn("video {} not correctly loaded during training".format(sample))
+                    index = np.random.randint(self.__len__())
+                    sample = self.dataset_samples[index]
+                    buffer = self.loadvideo_decord(sample, sample_rate_scale=scale_t)
+
+            if args.num_sample > 1:
+                frame_list = []
+                label_list = []
+                index_list = []
+                for _ in range(args.num_sample):
+                    new_frames = self._aug_frame(buffer, args)
+                    label = self.label_array[index]
+                    frame_list.append(new_frames)
+                    label_list.append(label)
+                    index_list.append(index)
+                return frame_list, label_list, index_list, {}, \
+                    bbox_set, bbox_mask, label_from_bbox_data
+            else:
+                buffer = self._aug_frame(buffer, args)
+            
+            return buffer, self.label_array[index], index, {}, \
+                bbox_set, bbox_mask, label_from_bbox_data
+
+        elif self.mode == 'validation':
+            sample = self.dataset_samples[index]
+            buffer = self.loadvideo_decord(sample)
+            if len(buffer) == 0:
+                while len(buffer) == 0:
+                    warnings.warn("video {} not correctly loaded during validation".format(sample))
+                    index = np.random.randint(self.__len__())
+                    sample = self.dataset_samples[index]
+                    buffer = self.loadvideo_decord(sample)
+            buffer = self.data_transform(buffer)
+            return buffer, self.label_array[index], sample.split("/")[-1].split(".")[0], \
+                bbox_set, bbox_mask, label_from_bbox_data
+
+    def _aug_frame(
+        self,
+        buffer,
+        args,
+    ):
+
+        aug_transform = video_transforms.create_random_augment(
+            input_size=(self.crop_size, self.crop_size),
+            auto_augment=args.aa,
+            interpolation=args.train_interpolation,
+        )
+
+        buffer = [
+            transforms.ToPILImage()(frame) for frame in buffer
+        ]
+
+        buffer = aug_transform(buffer)
+
+        buffer = [transforms.ToTensor()(img) for img in buffer]
+        buffer = torch.stack(buffer) # T C H W
+        buffer = buffer.permute(0, 2, 3, 1) # T H W C 
+        
+        # T H W C 
+        buffer = tensor_normalize(
+            buffer, [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
+        )
+        # T H W C -> C T H W.
+        buffer = buffer.permute(3, 0, 1, 2)
+        # Perform data augmentation.
+        scl, asp = (
+            [0.08, 1.0],
+            [0.75, 1.3333],
+        )
+
+        buffer = spatial_sampling(
+            buffer,
+            spatial_idx=-1,
+            min_scale=256,
+            max_scale=320,
+            crop_size=self.crop_size,
+            random_horizontal_flip=False if args.data_set == 'SSV2' else True,
+            inverse_uniform_sampling=False,
+            aspect_ratio=asp,
+            scale=scl,
+            motion_shift=False
+        )
+
+        if self.rand_erase:
+            erase_transform = RandomErasing(
+                args.reprob,
+                mode=args.remode,
+                max_count=args.recount,
+                num_splits=args.recount,
+                device="cpu",
+            )
+            buffer = buffer.permute(1, 0, 2, 3)
+            buffer = erase_transform(buffer)
+            buffer = buffer.permute(1, 0, 2, 3)
+
+        return buffer
+
+
+    def loadvideo_decord(self, sample, sample_rate_scale=1):
+        """Load video content using Decord"""
+        fname = sample
+
+        if not (os.path.exists(fname)):
+            return []
+
+        # avoid hanging issue
+        if os.path.getsize(fname) < 1 * 1024:
+            print('SKIP: ', fname, " - ", os.path.getsize(fname))
+            return []
+        try:
+            if self.keep_aspect_ratio:
+                vr = VideoReader(fname, num_threads=1, ctx=cpu(0))
+            else:
+                vr = VideoReader(fname, width=self.new_width, height=self.new_height,
+                                 num_threads=1, ctx=cpu(0))
+        except:
+            print("video cannot be loaded by decord: ", fname)
+            return []
+
+        if self.mode == 'test':
+            # all_index = []
+            # tick = len(vr) / float(self.num_segment)
+            # all_index = list(np.array([int(tick / 2.0 + tick * x) for x in range(self.num_segment)] +
+            #                    [int(tick * x) for x in range(self.num_segment)]))
+            # while len(all_index) < (self.num_segment * self.test_num_segment):
+            #     all_index.append(all_index[-1])
+            # all_index = list(np.sort(np.array(all_index))) 
+            # vr.seek(0)
+            # buffer = vr.get_batch(all_index).asnumpy()
+            all_index = [x for x in range(0, len(vr), self.frame_sample_rate)]
+            while len(all_index) < self.clip_len:
+                all_index.append(all_index[-1])
+            vr.seek(0)
+            buffer = vr.get_batch(all_index).asnumpy()
+            return buffer
+
+        # handle temporal segments
+        average_duration = len(vr) // self.num_segment
+        all_index = []
+        if average_duration > 0:
+            all_index += list(np.multiply(list(range(self.num_segment)), average_duration) + np.random.randint(average_duration,
+                                                                                                        size=self.num_segment))
+        elif len(vr) > self.num_segment:
+            all_index += list(np.sort(np.random.randint(len(vr), size=self.num_segment)))
+        else:
+            all_index += list(np.zeros((self.num_segment,)))
+        all_index = list(np.array(all_index)) 
+        vr.seek(0)
+        buffer = vr.get_batch(all_index).asnumpy()
+        return buffer
+
+    def __len__(self):
+        if self.mode != 'test':
+            return len(self.dataset_samples)
+        else:
+            return len(self.test_dataset)
+
 
 def spatial_sampling(
     frames,

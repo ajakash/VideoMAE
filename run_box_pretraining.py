@@ -18,7 +18,7 @@ from timm.utils import ModelEma
 from optim_factory import create_optimizer, get_parameter_groups, LayerDecayValueAssigner
 
 from datasets import build_dataset
-from engine_for_finetuning import train_one_epoch, validation_one_epoch, final_test, merge
+from engine_for_box_pretraining import train_one_epoch, validation_one_epoch #, final_test, merge
 from utils import NativeScalerWithGradNormCount as NativeScaler
 from utils import  multiple_samples_collate
 import utils
@@ -127,7 +127,9 @@ def get_args():
                         help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
 
     # Finetuning params
-    parser.add_argument('--finetune', default='', help='finetune from checkpoint')
+    parser.add_argument('--vid_encoder_init_ckpt', default='', help='video encoder initialization checkpoint')
+    # DONE: Add box_encoder_init_ckpt
+    parser.add_argument('--box_encoder_init_ckpt', default='', help='box encoder initialization checkpoint')
     parser.add_argument('--model_key', default='model|module', type=str)
     parser.add_argument('--model_prefix', default='', type=str)
     parser.add_argument('--init_scale', default=0.001, type=float)
@@ -229,12 +231,15 @@ def main(args, ds_init):
 
     cudnn.benchmark = True
 
+    # TODO: Include box data here
+    # TODO: use train and val sets together for dataset_train, 
+    # use val to check performance 
     dataset_train, args.nb_classes = build_dataset(is_train=True, test_mode=False, args=args)
     if args.disable_eval_during_finetuning:
         dataset_val = None
     else:
         dataset_val, _ = build_dataset(is_train=False, test_mode=False, args=args)
-    dataset_test, _ = build_dataset(is_train=False, test_mode=True, args=args)
+    # dataset_test, _ = build_dataset(is_train=False, test_mode=True, args=args)
     
 
     num_tasks = utils.get_world_size()
@@ -250,11 +255,11 @@ def main(args, ds_init):
                     'equal num of samples per-process.')
         sampler_val = torch.utils.data.DistributedSampler(
             dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=False)
-        sampler_test = torch.utils.data.DistributedSampler(
-            dataset_test, num_replicas=num_tasks, rank=global_rank, shuffle=False)
+        # sampler_test = torch.utils.data.DistributedSampler(
+        #     dataset_test, num_replicas=num_tasks, rank=global_rank, shuffle=False)
     else:
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-        sampler_test = torch.utils.data.SequentialSampler(dataset_test)
+        # sampler_test = torch.utils.data.SequentialSampler(dataset_test)
 
     if global_rank == 0 and args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
@@ -287,16 +292,16 @@ def main(args, ds_init):
     else:
         data_loader_val = None
 
-    if dataset_test is not None:
-        data_loader_test = torch.utils.data.DataLoader(
-            dataset_test, sampler=sampler_test,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
-            pin_memory=args.pin_mem,
-            drop_last=False
-        )
-    else:
-        data_loader_test = None
+    # if dataset_test is not None:
+    #     data_loader_test = torch.utils.data.DataLoader(
+    #         dataset_test, sampler=sampler_test,
+    #         batch_size=args.batch_size,
+    #         num_workers=args.num_workers,
+    #         pin_memory=args.pin_mem,
+    #         drop_last=False
+    #     )
+    # else:
+    #     data_loader_test = None
 
     mixup_fn = None
     mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
@@ -307,6 +312,7 @@ def main(args, ds_init):
             prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
             label_smoothing=args.smoothing, num_classes=args.nb_classes)
 
+    # TO NOT DO: Add box model in here?
     model = create_model(
         args.model,
         pretrained=False,
@@ -323,19 +329,20 @@ def main(args, ds_init):
         init_scale=args.init_scale,
     )
 
+    # TO NOT DO: update model here, model -> model.vit_encoder
     patch_size = model.patch_embed.patch_size
     print("Patch size = %s" % str(patch_size))
     args.window_size = (args.num_frames // 2, args.input_size // patch_size[0], args.input_size // patch_size[1])
     args.patch_size = patch_size
         
-    if args.finetune:
-        if args.finetune.startswith('https'):
+    if args.vid_encoder_init_ckpt:
+        if args.vid_encoder_init_ckpt.startswith('https'):
             checkpoint = torch.hub.load_state_dict_from_url(
-                args.finetune, map_location='cpu', check_hash=True)
+                args.vid_encoder_init_ckpt, map_location='cpu', check_hash=True)
         else:
-            checkpoint = torch.load(args.finetune, map_location='cpu')
+            checkpoint = torch.load(args.vid_encoder_init_ckpt, map_location='cpu')
 
-        print("Load ckpt from %s" % args.finetune)
+        print("Load ckpt from %s" % args.vid_encoder_init_ckpt)
         checkpoint_model = None
         for model_key in args.model_key.split('|'):
             if model_key in checkpoint:
@@ -344,6 +351,7 @@ def main(args, ds_init):
                 break
         if checkpoint_model is None:
             checkpoint_model = checkpoint
+        # TO NOT DO: update model here, model -> model.vit_encoder
         state_dict = model.state_dict()
         for k in ['head.weight', 'head.bias']:
             if k in checkpoint_model and checkpoint_model[k].shape != state_dict[k].shape:
@@ -365,6 +373,8 @@ def main(args, ds_init):
         if 'pos_embed' in checkpoint_model:
             pos_embed_checkpoint = checkpoint_model['pos_embed']
             embedding_size = pos_embed_checkpoint.shape[-1] # channel dim
+            # TO NOT DO: update model here all 7 locations, model -> model.vit_encoder
+            # until utils.load_state_dict
             num_patches = model.patch_embed.num_patches # 
             num_extra_tokens = model.pos_embed.shape[-2] - num_patches # 0/1
 
@@ -392,6 +402,15 @@ def main(args, ds_init):
         # ipdb.set_trace()
         utils.load_state_dict(model, checkpoint_model, prefix=args.model_prefix)
 
+    # TO NOT DO: Add args.box_encoder_init_ckpt to args
+    # and initialize model.box_encoder
+    # if args.box_encoder_init_ckpt:
+    #     if args.box_encoder_init_ckpt.startswith('https'):
+    #         checkpoint = torch.hub.load_state_dict_from_url(
+    #             args.box_encoder_init_ckpt, map_location='cpu', check_hash=True)
+    #     else:
+    #         checkpoint = torch.load(args.box_encoder_init_ckpt, map_location='cpu')
+    
     model.to(device)
 
     model_ema = None
@@ -403,10 +422,13 @@ def main(args, ds_init):
             resume='')
         print("Using EMA with decay = %.8f" % args.model_ema_decay)
 
-    model_without_ddp = model
+    # model_without_ddp = model
+    # TO NOT DO: Set all layers of model.vit_encoder to require grad
+    # and model.box_encoder to not require grad
+    # Also update the below if required
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    # print("Model = %s" % str(model_without_ddp))
+    # print("Model = %s" % str(model))
     print("Model = skipped")
     print('number of params:', n_parameters)
 
@@ -421,7 +443,10 @@ def main(args, ds_init):
     print("Number of training examples = %d" % len(dataset_train))
     print("Number of training training per epoch = %d" % num_training_steps_per_epoch)
 
-    num_layers = model_without_ddp.get_num_layers()
+    # TO NOT DO: Might have to update model -> model.video_encoder
+    # Or just comment and not use assigner
+    num_layers = model.get_num_layers()
+    # TO NOT DO: Maybe set assigner to None?
     if args.layer_decay < 1.0:
         assigner = LayerDecayValueAssigner(list(args.layer_decay ** (num_layers + 1 - i) for i in range(num_layers + 2)))
     else:
@@ -430,8 +455,23 @@ def main(args, ds_init):
     if assigner is not None:
         print("Assigned values = %s" % str(assigner.values))
 
+    # TO NOT DO: ?? Update model.no_weight_decay() to model.vit_encoder.no_weight_decay()
     skip_weight_decay_list = model.no_weight_decay()
     print("Skip weight decay list: ", skip_weight_decay_list)
+
+    # TODO: wrap box encoder into model 
+    # model -> model.video_encoder 
+    # initialize model.box_encoder
+    # 
+    # if args.box_encoder_init_ckpt:
+    #     if args.box_encoder_init_ckpt.startswith('https'):
+    #         checkpoint = torch.hub.load_state_dict_from_url(
+    #             args.box_encoder_init_ckpt, map_location='cpu', check_hash=True)
+    #     else:
+    #         checkpoint = torch.load(args.box_encoder_init_ckpt, map_location='cpu')
+
+    box_encoder = load_box_encoder()
+    model = combine_models(model, box_encoder)
 
     if args.enable_deepspeed:
         loss_scaler = None
@@ -450,6 +490,8 @@ def main(args, ds_init):
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
             model_without_ddp = model.module
 
+        # TO NOT DO: Compare with finetuning to see if weight_decay and 
+        # layer_decay functions as expected
         optimizer = create_optimizer(
             args, model_without_ddp, skip_list=skip_weight_decay_list,
             get_num_layer=assigner.get_layer_id if assigner is not None else None, 
@@ -467,6 +509,7 @@ def main(args, ds_init):
         args.weight_decay, args.weight_decay_end, args.epochs, num_training_steps_per_epoch)
     print("Max WD = %.7f, Min WD = %.7f" % (max(wd_schedule_values), min(wd_schedule_values)))
 
+    # TODO: Update criterion with OATransformer one
     if mixup_fn is not None:
         # smoothing is handled with mixup label transform
         criterion = SoftTargetCrossEntropy()
@@ -477,24 +520,28 @@ def main(args, ds_init):
 
     print("criterion = %s" % str(criterion))
 
-    utils.auto_load_model(
-        args=args, model=model, model_without_ddp=model_without_ddp,
-        optimizer=optimizer, loss_scaler=loss_scaler, model_ema=model_ema)
+    # Why this????? O.o
+    # In order to resume training from a check point. 
+    # Comment this out for now for box pretraining since 
+    # two models are involved, not straightforward.
+    # utils.auto_load_model(
+    #     args=args, model=model, model_without_ddp=model_without_ddp,
+    #     optimizer=optimizer, loss_scaler=loss_scaler, model_ema=model_ema)
 
-    if args.eval:
-        preds_file = os.path.join(args.output_dir, str(global_rank) + '.txt')
-        test_stats = final_test(data_loader_test, model, device, preds_file)
-        torch.distributed.barrier()
-        if global_rank == 0:
-            print("Start merging results...")
-            final_top1 ,final_top5 = merge(args.output_dir, num_tasks)
-            print(f"Accuracy of the network on the {len(dataset_test)} test videos: Top-1: {final_top1:.2f}%, Top-5: {final_top5:.2f}%")
-            log_stats = {'Final top-1': final_top1,
-                        'Final Top-5': final_top5}
-            if args.output_dir and utils.is_main_process():
-                with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
-                    f.write(json.dumps(log_stats) + "\n")
-        exit(0)
+    # if args.eval:
+    #     preds_file = os.path.join(args.output_dir, str(global_rank) + '.txt')
+    #     test_stats = final_test(data_loader_test, model, device, preds_file)
+    #     torch.distributed.barrier()
+    #     if global_rank == 0:
+    #         print("Start merging results...")
+    #         final_top1 ,final_top5 = merge(args.output_dir, num_tasks)
+    #         print(f"Accuracy of the network on the {len(dataset_test)} test videos: Top-1: {final_top1:.2f}%, Top-5: {final_top5:.2f}%")
+    #         log_stats = {'Final top-1': final_top1,
+    #                     'Final Top-5': final_top5}
+    #         if args.output_dir and utils.is_main_process():
+    #             with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+    #                 f.write(json.dumps(log_stats) + "\n")
+    #     exit(0)
         
 
     print(f"Start training for {args.epochs} epochs")
@@ -505,6 +552,7 @@ def main(args, ds_init):
             data_loader_train.sampler.set_epoch(epoch)
         if log_writer is not None:
             log_writer.set_step(epoch * num_training_steps_per_epoch * args.update_freq)
+        # TODO: Update here
         train_stats = train_one_epoch(
             model, criterion, data_loader_train, optimizer,
             device, epoch, loss_scaler, args.clip_grad, model_ema, mixup_fn,
@@ -518,6 +566,7 @@ def main(args, ds_init):
                     args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                     loss_scaler=loss_scaler, epoch=epoch, model_ema=model_ema)
         if data_loader_val is not None:
+            # TODO: Update here
             test_stats = validation_one_epoch(data_loader_val, model, device)
             print(f"Accuracy of the network on the {len(dataset_val)} val videos: {test_stats['acc1']:.1f}%")
             if max_accuracy < test_stats["acc1"]:
@@ -547,18 +596,18 @@ def main(args, ds_init):
             with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
                 f.write(json.dumps(log_stats) + "\n")
 
-    preds_file = os.path.join(args.output_dir, str(global_rank) + '.txt')
-    test_stats = final_test(data_loader_test, model, device, preds_file)
-    torch.distributed.barrier()
-    if global_rank == 0:
-        print("Start merging results...")
-        final_top1 ,final_top5 = merge(args.output_dir, num_tasks)
-        print(f"Accuracy of the network on the {len(dataset_test)} test videos: Top-1: {final_top1:.2f}%, Top-5: {final_top5:.2f}%")
-        log_stats = {'Final top-1': final_top1,
-                    'Final Top-5': final_top5}
-        if args.output_dir and utils.is_main_process():
-            with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
-                f.write(json.dumps(log_stats) + "\n")
+    # preds_file = os.path.join(args.output_dir, str(global_rank) + '.txt')
+    # test_stats = final_test(data_loader_test, model, device, preds_file)
+    # torch.distributed.barrier()
+    # if global_rank == 0:
+    #     print("Start merging results...")
+    #     final_top1 ,final_top5 = merge(args.output_dir, num_tasks)
+    #     print(f"Accuracy of the network on the {len(dataset_test)} test videos: Top-1: {final_top1:.2f}%, Top-5: {final_top5:.2f}%")
+    #     log_stats = {'Final top-1': final_top1,
+    #                 'Final Top-5': final_top5}
+    #     if args.output_dir and utils.is_main_process():
+    #         with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+    #             f.write(json.dumps(log_stats) + "\n")
 
 
     total_time = time.time() - start_time
