@@ -11,8 +11,11 @@ import utils
 from scipy.special import softmax
 
 
-def train_class_batch(model, samples, target, criterion):
-    outputs = model(samples)
+def train_class_batch(model, bbox_set, bbox_tgt, bbox_mask, bbox_targets, samples, target, criterion):
+    box_outputs, video_outputs = model(bbox_set, bbox_tgt, bbox_mask, samples)
+    # TODO: Check that bbox_targets and target are the same
+
+    # TODO: Update after updating criterion
     loss = criterion(outputs, target)
     return loss, outputs
 
@@ -41,7 +44,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     else:
         optimizer.zero_grad()
 
-    for data_iter_step, (samples, targets, _, _) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+    for data_iter_step, (samples, targets, bbox_set, bbox_mask, targets_bbox, _, _) in \
+        enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         step = data_iter_step // update_freq
         if step >= num_training_steps_per_epoch:
             continue
@@ -56,6 +60,11 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
         samples = samples.to(device, non_blocking=True)
         targets = targets.to(device, non_blocking=True)
+        bbox_set = bbox_set.to(device, non_blocking=True)
+        bbox_mask = bbox_mask.to(device, non_blocking=True)
+        bbox_targets = targets_bbox.to(device, non_blocking=True)
+        # Box transforemer decoder inputs
+        bbox_tgt = torch.zeros([bbox_set.size(dim=0), 1], dtype=torch.int).to(device, non_blocking=True)
 
         if mixup_fn is not None:
             samples, targets = mixup_fn(samples, targets)
@@ -63,11 +72,11 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         if loss_scaler is None:
             samples = samples.half()
             loss, output = train_class_batch(
-                model, samples, targets, criterion)
+                model, bbox_set, bbox_tgt, bbox_mask, bbox_targets, samples, targets, criterion)
         else:
             with torch.cuda.amp.autocast():
                 loss, output = train_class_batch(
-                    model, samples, targets, criterion)
+                    model, bbox_set, bbox_tgt, bbox_mask, bbox_targets, samples, targets, criterion)
 
         loss_value = loss.item()
 
@@ -154,12 +163,18 @@ def validation_one_epoch(data_loader, model, device):
     for batch in metric_logger.log_every(data_loader, 10, header):
         videos = batch[0]
         target = batch[1]
+        bbox_set = batch[2].to(device, non_blocking=True)
+        bbox_mask = batch[3].to(device, non_blocking=True)
+        bbox_targets = batch[4].to(device, non_blocking=True)
+        # Box transforemer decoder inputs
+        bbox_tgt = torch.zeros([bbox_set.size(dim=0), 1], dtype=torch.int).to(device, non_blocking=True)
         videos = videos.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
 
         # compute output
         with torch.cuda.amp.autocast():
-            output = model(videos)
+            box_outputs, video_outputs = model(bbox_set, bbox_tgt, bbox_mask, videos)
+            # TODO: Update here after updating criterion
             loss = criterion(output, target)
 
         acc1, acc5 = accuracy(output, target, topk=(1, 5))

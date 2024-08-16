@@ -394,8 +394,9 @@ class VideoBoxClsDataset(Dataset):
             else:
                 buffer = self._aug_frame(buffer, args)
             
-            return buffer, self.label_array[index], index, {}, \
-                bbox_set, bbox_mask, label_from_bbox_data
+            return buffer, self.label_array[index], \
+                bbox_set, bbox_mask, label_from_bbox_data, \
+                index, {}
 
         elif self.mode == 'validation':
             sample = self.dataset_samples[index]
@@ -407,8 +408,9 @@ class VideoBoxClsDataset(Dataset):
                     sample = self.dataset_samples[index]
                     buffer = self.loadvideo_decord(sample)
             buffer = self.data_transform(buffer)
-            return buffer, self.label_array[index], sample.split("/")[-1].split(".")[0], \
-                bbox_set, bbox_mask, label_from_bbox_data
+            return buffer, self.label_array[index], \
+                bbox_set, bbox_mask, label_from_bbox_data, \
+                sample.split("/")[-1].split(".")[0]
 
     def _aug_frame(
         self,

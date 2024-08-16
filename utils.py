@@ -534,3 +534,24 @@ def multiple_samples_collate(batch, fold=False):
         return [inputs], labels, video_idx, extra_data
     else:
         return inputs, labels, video_idx, extra_data
+
+def load_box_encoder(args):
+    model = torch.load(args.box_encoder_init_ckpt, map_location='cpu')
+    for param in model.parameters():
+        param.requires_grad = False
+
+    return model
+
+class BoxPretrainingModel(torch.nn.Module):
+    def __init__(self, boxEncoder, videoEncoder):
+        super(BoxPretrainingModel, self).__init__()
+        self.boxEncoder = boxEncoder
+        self.videoEncoder = videoEncoder
+        
+    def forward(self, box_src, box_tgt, box_src_padding_mask, frames):
+        box_outputs = self.boxEncoder(box_src, box_tgt, box_src_padding_mask)
+        video_outputs = self.videoEncoder(frames)
+        return box_outputs, video_outputs
+
+def combine_models(model, box_encoder):
+    pass

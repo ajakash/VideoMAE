@@ -21,6 +21,7 @@ from datasets import build_dataset
 from engine_for_box_pretraining import train_one_epoch, validation_one_epoch #, final_test, merge
 from utils import NativeScalerWithGradNormCount as NativeScaler
 from utils import  multiple_samples_collate
+from utils import 
 import utils
 import modeling_finetune
 
@@ -151,7 +152,8 @@ def get_args():
     parser.add_argument('--num_frames', type=int, default= 16)
     parser.add_argument('--sampling_rate', type=int, default= 4)
     parser.add_argument('--data_set', default='Kinetics-400',
-                        choices=['Kinetics-400', 'SSV2', 'UCF101', 'HMDB51', 'MOMA_sact', 'MOMA_sact_uniSampling', 'MOMA_act', 'image_folder'],
+                        choices=['Kinetics-400', 'SSV2', 'UCF101', 'HMDB51', 'MOMA_sact', \
+                                 'MOMA_sact_uniSampling', 'MOMA_act', 'image_folder', 'MOMA_sact_frames_boxes'],
                         type=str, help='dataset')
     parser.add_argument('--output_dir', default='',
                         help='path where to save, empty for no saving')
@@ -231,8 +233,8 @@ def main(args, ds_init):
 
     cudnn.benchmark = True
 
-    # TODO: Include box data here
-    # TODO: use train and val sets together for dataset_train, 
+    # DONE: Include box data here
+    # DONE: use train and val sets together for dataset_train, 
     # use val to check performance 
     dataset_train, args.nb_classes = build_dataset(is_train=True, test_mode=False, args=args)
     if args.disable_eval_during_finetuning:
@@ -459,19 +461,11 @@ def main(args, ds_init):
     skip_weight_decay_list = model.no_weight_decay()
     print("Skip weight decay list: ", skip_weight_decay_list)
 
-    # TODO: wrap box encoder into model 
+    # DONE: wrap box encoder into model 
     # model -> model.video_encoder 
     # initialize model.box_encoder
-    # 
-    # if args.box_encoder_init_ckpt:
-    #     if args.box_encoder_init_ckpt.startswith('https'):
-    #         checkpoint = torch.hub.load_state_dict_from_url(
-    #             args.box_encoder_init_ckpt, map_location='cpu', check_hash=True)
-    #     else:
-    #         checkpoint = torch.load(args.box_encoder_init_ckpt, map_location='cpu')
-
-    box_encoder = load_box_encoder()
-    model = combine_models(model, box_encoder)
+    box_encoder = utils.load_box_encoder(args)
+    model = utils.BoxPretrainingModel(box_encoder, model)
 
     if args.enable_deepspeed:
         loss_scaler = None
@@ -490,8 +484,7 @@ def main(args, ds_init):
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
             model_without_ddp = model.module
 
-        # TO NOT DO: Compare with finetuning to see if weight_decay and 
-        # layer_decay functions as expected
+        # DONE: Make sure box encoder parameters are not added for updates, check other details
         optimizer = create_optimizer(
             args, model_without_ddp, skip_list=skip_weight_decay_list,
             get_num_layer=assigner.get_layer_id if assigner is not None else None, 
