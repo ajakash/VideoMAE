@@ -15,6 +15,7 @@ import torch.distributed as dist
 # from torch._six import inf
 from torch import inf
 import random
+import torch.nn.functional as F
 
 from tensorboardX import SummaryWriter
 
@@ -553,5 +554,81 @@ class BoxPretrainingModel(torch.nn.Module):
         video_outputs = self.videoEncoder(frames)
         return box_outputs, video_outputs
 
-def combine_models(model, box_encoder):
-    pass
+'''
+Following code from https://github.com/FingerRec/OA-Transformer/tree/main
+official code release for OA-Transformer,
+Object-aware Video-language Pre-training for Retrieval (CVPR 2022)
+'''
+
+# From OATrans/model/model.py
+# To compute similarity between visual and box features
+def sim_matrix(a, b, eps=1e-8):
+    """
+    added eps for numerical stability
+    """
+    a_n, b_n = a.norm(dim=1)[:, None], b.norm(dim=1)[:, None]
+    a_norm = a / torch.max(a_n, eps * torch.ones_like(a_n))
+    b_norm = b / torch.max(b_n, eps * torch.ones_like(b_n))
+    sim_mt = torch.mm(a_norm, b_norm.transpose(0, 1))
+    return sim_mt
+
+# From OATrans/model/loss.py
+class NormSoftmaxLoss(torch.nn.Module):
+    def __init__(self, temperature=0.05):
+        super().__init__()
+
+        self.temperature = temperature
+
+    def forward(self, x):
+        """Assumes input x is similarity matrix of N x M \in [-1, 1], 
+            computed using the cosine similarity between normalised vectors"""
+        i_logsm = F.log_softmax(x/self.temperature, dim=1)
+        j_logsm = F.log_softmax(x.t()/self.temperature, dim=1)
+
+        # sum over positives
+        idiag = torch.diag(i_logsm)
+        loss_i = idiag.sum() / len(idiag)
+
+        jdiag = torch.diag(j_logsm)
+        loss_j = jdiag.sum() / len(jdiag)
+
+        return - loss_i - loss_j
+
+
+# From OATrans/trainer/trainer_dist.py
+# 
+class AllGather(torch.autograd.Function):
+    """An autograd function that performs allgather on a tensor."""
+
+    @staticmethod
+    def forward(ctx, tensor, n_gpu, args):
+        output = [torch.empty_like(tensor) for _ in range(n_gpu)]
+        dist.all_gather(output, tensor)
+        ctx.local_rank = args.local_rank
+        ctx.batch_size = tensor.shape[0]
+        return torch.cat(output, 0)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return (
+            grad_output[ctx.batch_size * ctx.local_rank : ctx.batch_size * (ctx.local_rank + 1)],
+            None, None,
+        )
+
+class AllGather_multi(torch.autograd.Function):
+    """An autograd function that performs allgather on a tensor."""
+
+    @staticmethod
+    def forward(ctx, tensor, n_gpu, args):
+        output = [torch.empty_like(tensor) for _ in range(args.world_size)]
+        dist.all_gather(output, tensor)
+        ctx.rank = args.rank
+        ctx.batch_size = tensor.shape[0]
+        return torch.cat(output, 0)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return (
+            grad_output[ctx.batch_size * ctx.rank : ctx.batch_size * (ctx.rank + 1)],
+            None, None,
+        )

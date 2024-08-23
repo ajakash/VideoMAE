@@ -11,13 +11,21 @@ import utils
 from scipy.special import softmax
 
 
-def train_class_batch(model, bbox_set, bbox_tgt, bbox_mask, bbox_targets, samples, target, criterion):
+def train_class_batch(args, model, bbox_set, bbox_tgt, bbox_mask, bbox_targets, samples, target, criterion):
     box_outputs, video_outputs = model(bbox_set, bbox_tgt, bbox_mask, samples)
     # TODO: Check that bbox_targets and target are the same
 
-    # TODO: Update after updating criterion
-    loss = criterion(outputs, target)
-    return loss, outputs
+    if args.distributed:
+        # allgather = utils.AllGather_multi.apply
+        video_outputs = criterion["AllGather"](video_outputs, args.world_size, args)
+        box_outputs = criterion["AllGather"](box_outputs, args.world_size, args)
+    # TODO: Check if both outputs are same
+    output = utils.sim_matrix(box_outputs, video_outputs)
+    output2 = utils.sim_matrix(video_outputs, box_outputs)
+    loss = criterion["PreTrain"](output)  # normal t2v loss
+
+    # loss = criterion(outputs, target)
+    return loss, video_outputs, box_outputs
 
 
 def get_loss_scale_for_deepspeed(model):
@@ -25,7 +33,7 @@ def get_loss_scale_for_deepspeed(model):
     return optimizer.loss_scale if hasattr(optimizer, "loss_scale") else optimizer.cur_scale
 
 
-def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
+def train_one_epoch(args, model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, loss_scaler, max_norm: float = 0,
                     model_ema: Optional[ModelEma] = None, mixup_fn: Optional[Mixup] = None, log_writer=None,
@@ -71,12 +79,12 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
         if loss_scaler is None:
             samples = samples.half()
-            loss, output = train_class_batch(
-                model, bbox_set, bbox_tgt, bbox_mask, bbox_targets, samples, targets, criterion)
+            loss, video_output, box_output = train_class_batch(
+                args, model, bbox_set, bbox_tgt, bbox_mask, bbox_targets, samples, targets, criterion)
         else:
             with torch.cuda.amp.autocast():
-                loss, output = train_class_batch(
-                    model, bbox_set, bbox_tgt, bbox_mask, bbox_targets, samples, targets, criterion)
+                loss, video_output, box_output = train_class_batch(
+                    args, model, bbox_set, bbox_tgt, bbox_mask, bbox_targets, samples, targets, criterion)
 
         loss_value = loss.item()
 
@@ -111,12 +119,12 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
         torch.cuda.synchronize()
 
-        if mixup_fn is None:
-            class_acc = (output.max(-1)[-1] == targets).float().mean()
-        else:
-            class_acc = None
+        # if mixup_fn is None:
+        #     class_acc = (output.max(-1)[-1] == targets).float().mean()
+        # else:
+        #     class_acc = None
         metric_logger.update(loss=loss_value)
-        metric_logger.update(class_acc=class_acc)
+        # metric_logger.update(class_acc=class_acc)
         metric_logger.update(loss_scale=loss_scale_value)
         min_lr = 10.
         max_lr = 0.
@@ -135,7 +143,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
         if log_writer is not None:
             log_writer.update(loss=loss_value, head="loss")
-            log_writer.update(class_acc=class_acc, head="loss")
+            # log_writer.update(class_acc=class_acc, head="loss")
             log_writer.update(loss_scale=loss_scale_value, head="opt")
             log_writer.update(lr=max_lr, head="opt")
             log_writer.update(min_lr=min_lr, head="opt")
@@ -189,111 +197,3 @@ def validation_one_epoch(data_loader, model, device):
           .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
-
-
-
-@torch.no_grad()
-def final_test(data_loader, model, device, file):
-    criterion = torch.nn.CrossEntropyLoss()
-
-    metric_logger = utils.MetricLogger(delimiter="  ")
-    header = 'Test:'
-
-    # switch to evaluation mode
-    model.eval()
-    final_result = []
-    
-    for batch in metric_logger.log_every(data_loader, 10, header):
-        videos = batch[0]
-        target = batch[1]
-        ids = batch[2]
-        chunk_nb = batch[3]
-        split_nb = batch[4]
-        videos = videos.to(device, non_blocking=True)
-        target = target.to(device, non_blocking=True)
-        # print(videos.size(), target.size(), chunk_nb, split_nb)
-        # compute output
-        with torch.cuda.amp.autocast():
-            output = model(videos)
-            # ipdb.set_trace()
-            loss = criterion(output, target)
-
-        for i in range(output.size(0)):
-            string = "{} {} {} {} {}\n".format(ids[i], \
-                                                str(output.data[i].cpu().numpy().tolist()), \
-                                                str(int(target[i].cpu().numpy())), \
-                                                str(int(chunk_nb[i].cpu().numpy())), \
-                                                str(int(split_nb[i].cpu().numpy())))
-            final_result.append(string)
-
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
-
-        batch_size = videos.shape[0]
-        metric_logger.update(loss=loss.item())
-        metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
-        metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
-
-    if not os.path.exists(file):
-        os.mknod(file)
-    with open(file, 'w') as f:
-        f.write("{}, {}\n".format(acc1, acc5))
-        for line in final_result:
-            f.write(line)
-    # gather the stats from all processes
-    metric_logger.synchronize_between_processes()
-    print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
-          .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
-
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
-
-
-def merge(eval_path, num_tasks):
-    dict_feats = {}
-    dict_label = {}
-    dict_pos = {}
-    print("Reading individual output files")
-
-    for x in range(num_tasks):
-        file = os.path.join(eval_path, str(x) + '.txt')
-        lines = open(file, 'r').readlines()[1:]
-        for line in lines:
-            line = line.strip()
-            name = line.split('[')[0]
-            label = line.split(']')[1].split(' ')[1]
-            chunk_nb = line.split(']')[1].split(' ')[2]
-            split_nb = line.split(']')[1].split(' ')[3]
-            data = np.fromstring(line.split('[')[1].split(']')[0], dtype=np.float32, sep=',')
-            data = softmax(data)
-            if not name in dict_feats:
-                dict_feats[name] = []
-                dict_label[name] = 0
-                dict_pos[name] = []
-            if chunk_nb + split_nb in dict_pos[name]:
-                continue
-            dict_feats[name].append(data)
-            dict_pos[name].append(chunk_nb + split_nb)
-            dict_label[name] = label
-    print("Computing final results")
-
-    input_lst = []
-    print(len(dict_feats))
-    for i, item in enumerate(dict_feats):
-        input_lst.append([i, item, dict_feats[item], dict_label[item]])
-    from multiprocessing import Pool
-    p = Pool(64)
-    ans = p.map(compute_video, input_lst)
-    top1 = [x[1] for x in ans]
-    top5 = [x[2] for x in ans]
-    pred = [x[0] for x in ans]
-    label = [x[3] for x in ans]
-    final_top1 ,final_top5 = np.mean(top1), np.mean(top5)
-    return final_top1*100 ,final_top5*100
-
-def compute_video(lst):
-    i, video_id, data, label = lst
-    feat = [x for x in data]
-    feat = np.mean(feat, axis=0)
-    pred = np.argmax(feat)
-    top1 = (int(pred) == int(label)) * 1.0
-    top5 = (int(label) in np.argsort(-feat)[:5]) * 1.0
-    return [pred, top1, top5, int(label)]

@@ -21,7 +21,6 @@ from datasets import build_dataset
 from engine_for_box_pretraining import train_one_epoch, validation_one_epoch #, final_test, merge
 from utils import NativeScalerWithGradNormCount as NativeScaler
 from utils import  multiple_samples_collate
-from utils import 
 import utils
 import modeling_finetune
 
@@ -502,14 +501,17 @@ def main(args, ds_init):
         args.weight_decay, args.weight_decay_end, args.epochs, num_training_steps_per_epoch)
     print("Max WD = %.7f, Min WD = %.7f" % (max(wd_schedule_values), min(wd_schedule_values)))
 
-    # TODO: Update criterion with OATransformer one
-    if mixup_fn is not None:
-        # smoothing is handled with mixup label transform
-        criterion = SoftTargetCrossEntropy()
-    elif args.smoothing > 0.:
-        criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
-    else:
-        criterion = torch.nn.CrossEntropyLoss()
+    # DONE: Update criterion with OATransformer one
+    # if mixup_fn is not None:
+    #     # smoothing is handled with mixup label transform
+    #     criterion = SoftTargetCrossEntropy()
+    # elif args.smoothing > 0.:
+    #     criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
+    # else:
+    #     criterion = torch.nn.CrossEntropyLoss()
+    criterion = {"PreTrain": utils.NormSoftmaxLoss(),
+                 "Validation": torch.nn.CrossEntropyLoss(),
+                 "AllGather": utils.AllGather_multi.apply}
 
     print("criterion = %s" % str(criterion))
 
@@ -545,13 +547,13 @@ def main(args, ds_init):
             data_loader_train.sampler.set_epoch(epoch)
         if log_writer is not None:
             log_writer.set_step(epoch * num_training_steps_per_epoch * args.update_freq)
-        # TODO: Update here
+        # DONE: Update here
         train_stats = train_one_epoch(
-            model, criterion, data_loader_train, optimizer,
+            args, model, criterion, data_loader_train, optimizer,
             device, epoch, loss_scaler, args.clip_grad, model_ema, mixup_fn,
             log_writer=log_writer, start_steps=epoch * num_training_steps_per_epoch,
             lr_schedule_values=lr_schedule_values, wd_schedule_values=wd_schedule_values,
-            num_training_steps_per_epoch=num_training_steps_per_epoch, update_freq=args.update_freq,
+            num_training_steps_per_epoch=num_training_steps_per_epoch, update_freq=args.update_freq
         )
         if args.output_dir and args.save_ckpt:
             if (epoch + 1) % args.save_ckpt_freq == 0 or epoch + 1 == args.epochs:
