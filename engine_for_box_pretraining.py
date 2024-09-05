@@ -13,15 +13,18 @@ from scipy.special import softmax
 
 def train_class_batch(args, model, bbox_set, bbox_tgt, bbox_mask, bbox_targets, samples, target, criterion):
     box_outputs, video_outputs = model(bbox_set, bbox_tgt, bbox_mask, samples)
-    # TODO: Check that bbox_targets and target are the same
+    # DONE: Check that bbox_targets and target are the same
+    # bbox_targets are indices, target are class probability vectors
+    # Anyways doesn't matter for box pretraining ¯\_(ツ)_/¯
 
     if args.distributed:
         # allgather = utils.AllGather_multi.apply
         video_outputs = criterion["AllGather"](video_outputs, args.world_size, args)
         box_outputs = criterion["AllGather"](box_outputs, args.world_size, args)
-    # TODO: Check if both outputs are same
-    output = utils.sim_matrix(box_outputs, video_outputs)
-    output2 = utils.sim_matrix(video_outputs, box_outputs)
+    # DONE: Check if both outputs are same
+    # ipdb.set_trace()
+    output = utils.sim_matrix(box_outputs.squeeze(1), video_outputs)
+    output2 = utils.sim_matrix(video_outputs, box_outputs.squeeze(1))
     loss = criterion["PreTrain"](output)  # normal t2v loss
 
     # loss = criterion(outputs, target)
@@ -159,8 +162,8 @@ def train_one_epoch(args, model: torch.nn.Module, criterion: torch.nn.Module,
 
 
 @torch.no_grad()
-def validation_one_epoch(data_loader, model, device):
-    criterion = torch.nn.CrossEntropyLoss()
+def validation_one_epoch(data_loader, model, device, criterion):
+    # criterion = torch.nn.CrossEntropyLoss()
 
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Val:'
@@ -182,10 +185,10 @@ def validation_one_epoch(data_loader, model, device):
         # compute output
         with torch.cuda.amp.autocast():
             box_outputs, video_outputs = model(bbox_set, bbox_tgt, bbox_mask, videos)
-            # TODO: Update here after updating criterion
-            loss = criterion(output, target)
+            # DONE: Update here after updating criterion
+            loss = criterion["Validation"](video_outputs, target)
 
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        acc1, acc5 = accuracy(video_outputs, target, topk=(1, 5))
 
         batch_size = videos.shape[0]
         metric_logger.update(loss=loss.item())

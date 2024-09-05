@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --nodes=1 
-#SBATCH --gpus-per-node=v100l:4   
+#SBATCH --gpus-per-node=v100:4   
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32    # There are 24 CPU cores on V100 Cedar GPU nodes
 #SBATCH --mem=0               # Request the full memory of the node
@@ -14,7 +14,7 @@ OUTPUT_DIR='/home/aabdujyo/scratch/VideoMAE/checkpoints/'$1
 # path to Kinetics set (train.csv/val.csv/test.csv)
 LOG_DIR='/home/aabdujyo/scratch/VideoMAE/log/'$1
 # path to pretrain model
-MODEL_PATH='/home/aabdujyo/scratch/VideoMAE/VideoMAE_pretrained_ckpts/'$2
+MODEL_PATH='/home/aabdujyo/scratch/VideoMAE/'$2
 # MODEL_PATH='/home/aabdujyo/scratch/VideoMAE/VideoMAE_pretrained_ckpts/checkpoint_ViT-S_SS_ep2400.pth'
 # MODEL_PATH='/home/aabdujyo/scratch/VideoMAE/VideoMAE_pretrained_ckpts/checkpoint_ViT-B_SS_ep2400.pth'
 

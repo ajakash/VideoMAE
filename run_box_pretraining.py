@@ -464,6 +464,8 @@ def main(args, ds_init):
     # model -> model.video_encoder 
     # initialize model.box_encoder
     box_encoder = utils.load_box_encoder(args)
+    box_encoder.to(device)
+    print("Box Encoder loaded")
     model = utils.BoxPretrainingModel(box_encoder, model)
 
     if args.enable_deepspeed:
@@ -482,7 +484,9 @@ def main(args, ds_init):
         if args.distributed:
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
             model_without_ddp = model.module
-
+        else:
+            model_without_ddp = model
+            
         # DONE: Make sure box encoder parameters are not added for updates, check other details
         optimizer = create_optimizer(
             args, model_without_ddp, skip_list=skip_weight_decay_list,
@@ -558,17 +562,17 @@ def main(args, ds_init):
         if args.output_dir and args.save_ckpt:
             if (epoch + 1) % args.save_ckpt_freq == 0 or epoch + 1 == args.epochs:
                 utils.save_model(
-                    args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+                    args=args, model=model, model_without_ddp=model_without_ddp.videoEncoder, optimizer=optimizer,
                     loss_scaler=loss_scaler, epoch=epoch, model_ema=model_ema)
         if data_loader_val is not None:
             # TODO: Update here
-            test_stats = validation_one_epoch(data_loader_val, model, device)
+            test_stats = validation_one_epoch(data_loader_val, model, device, criterion)
             print(f"Accuracy of the network on the {len(dataset_val)} val videos: {test_stats['acc1']:.1f}%")
             if max_accuracy < test_stats["acc1"]:
                 max_accuracy = test_stats["acc1"]
                 if args.output_dir and args.save_ckpt:
                     utils.save_model(
-                        args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+                        args=args, model=model, model_without_ddp=model_without_ddp.videoEncoder, optimizer=optimizer,
                         loss_scaler=loss_scaler, epoch="best", model_ema=model_ema)
 
             print(f'Max accuracy: {max_accuracy:.2f}%')

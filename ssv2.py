@@ -324,8 +324,8 @@ class VideoBoxClsDataset(Dataset):
         self.label_array = list(cleaned.values[:, 1])
 
         # Remove dataset samples where number of bounding boxes across action < 10
-        ipdb.set_trace()
-        # TODO: Check if the function works correctly
+        # ipdb.set_trace()
+        # DONE: Check if the function works correctly
         # eg: see self.dataset_samples and self.label_array counts, values before and after
         self.trim_dataset()
 

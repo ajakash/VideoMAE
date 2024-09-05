@@ -154,14 +154,14 @@ def build_dataset(is_train, test_mode, args):
         if is_train is True:
             mode = 'train'
             anno_path = os.path.join('annotations/train_val_sact.csv')
-            box_data_path = os.path.join('box_data/train_val_sact.pt')
+            box_data_path = os.path.join('data_VideoBoxPT/train_val_sact.pt')
         elif test_mode is True:
             mode = 'test'
             anno_path = os.path.join('annotations/test_sact.csv')
         else:  
             mode = 'validation'
             anno_path = os.path.join('annotations/val_sact.csv')
-            box_data_path = os.path.join('box_data/val_sact.pt')
+            box_data_path = os.path.join('data_VideoBoxPT/val_sact.pt')
 
 
         dataset = VideoBoxClsDataset(

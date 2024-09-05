@@ -538,6 +538,7 @@ def multiple_samples_collate(batch, fold=False):
 
 def load_box_encoder(args):
     model = torch.load(args.box_encoder_init_ckpt, map_location='cpu')
+    model = torch.load(args.box_encoder_init_ckpt, map_location='cpu')
     for param in model.parameters():
         param.requires_grad = False
 

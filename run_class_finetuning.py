@@ -404,6 +404,7 @@ def main(args, ds_init):
         print("Using EMA with decay = %.8f" % args.model_ema_decay)
 
     model_without_ddp = model
+    ipdb.set_trace()
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
     # print("Model = %s" % str(model_without_ddp))
@@ -477,6 +478,7 @@ def main(args, ds_init):
 
     print("criterion = %s" % str(criterion))
 
+    # ipdb.set_trace()
     utils.auto_load_model(
         args=args, model=model, model_without_ddp=model_without_ddp,
         optimizer=optimizer, loss_scaler=loss_scaler, model_ema=model_ema)
