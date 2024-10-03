@@ -321,6 +321,7 @@ class VideoBoxClsDataset(Dataset):
         import pandas as pd
         cleaned = pd.read_csv(self.anno_path, header=None, delimiter=' ')
         self.dataset_samples = list(cleaned.values[:, 0])
+        self.dataset_samples = [f"{os.environ['SLURM_TMPDIR']}/sub-activity/{x.split('/')[-1]}" for x in self.dataset_samples]
         self.label_array = list(cleaned.values[:, 1])
 
         # Remove dataset samples where number of bounding boxes across action < 10

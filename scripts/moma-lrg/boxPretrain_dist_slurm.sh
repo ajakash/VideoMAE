@@ -28,6 +28,8 @@ module load python/3.10
 module load scipy-stack/2023b
 module load cuda
 
+cp -r /home/aabdujyo/scratch/MOMA-LRG/sub-activity $SLURM_TMPDIR/
+
 echo 'Starting to run the script!'
 
 # OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=8 \

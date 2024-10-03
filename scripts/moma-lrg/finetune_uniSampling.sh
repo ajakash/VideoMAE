@@ -1,9 +1,11 @@
 # Set the path to save checkpoints
-OUTPUT_DIR='/home/aabdujyo/scratch/VideoMAE/checkpoints/sact_uniSpl_B'
+OUTPUT_DIR='/home/aabdujyo/scratch/VideoMAE/checkpoints/'$1
 # path to Kinetics set (train.csv/val.csv/test.csv)
-LOG_DIR='/home/aabdujyo/scratch/VideoMAE/log/sact_uniSpl_B'
+LOG_DIR='/home/aabdujyo/scratch/VideoMAE/log/'$1
 # path to pretrain model
-MODEL_PATH='/home/aabdujyo/scratch/VideoMAE/VideoMAE_pretrained_ckpts/checkpoint_ViT-B_SS_ep2400.pth'
+MODEL_PATH='/home/aabdujyo/scratch/VideoMAE/'$2
+# MODEL_PATH='/home/aabdujyo/scratch/VideoMAE/VideoMAE_pretrained_ckpts/'$2
+# MODEL_PATH='/home/aabdujyo/scratch/VideoMAE/VideoMAE_pretrained_ckpts/checkpoint_ViT-B_SS_ep2400.pth'
 
 # We add repeated_aug (--num_sample = 2) on Kinetics-400 here, 
 # which could better performance while need more time for fine-tuning
