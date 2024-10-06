@@ -22,7 +22,7 @@ echo 'Starting to run the script!'
 # OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=8 \
 #     --master_port 12320 --nnodes=4  --node_rank=$1 --master_addr=$2 \
 python run_box_pretraining.py \
-    --num_workers 0 \
+    --num_workers 4 \
     --model vit_base_patch16_224 \
     --batch_size $2 \
     --epochs 150 \

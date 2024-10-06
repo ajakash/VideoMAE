@@ -24,7 +24,7 @@ python run_class_finetuning.py \
     --num_workers 0 \
     --model vit_small_patch16_224 \
     --epochs 150 \
-    --batch_size 10 \
+    --batch_size 4 \
     --num_sample 1 \
     --save_ckpt_freq 10 \
     --data_set MOMA_sact \
