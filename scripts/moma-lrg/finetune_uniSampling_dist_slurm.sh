@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32    # There are 24 CPU cores on V100 Cedar GPU nodes
 #SBATCH --mem=0               # Request the full memory of the node
-#SBATCH --time=23:59:00
+#SBATCH --time=11:59:00
 #SBATCH --account=def-mori
 #SBATCH --output=log/slurm_output/slurm-%J.out
 #SBATCH --error=log/slurm_output/error_%J.out

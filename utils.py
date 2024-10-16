@@ -639,33 +639,33 @@ def set_param_requires_grad(model, folder_name):
     for name, param in model.named_parameters():
         param.requires_grad = False
     
-    if folder_name == "sact_uniSpl_FTlayers_H":
-        for name, param in model.named_parameters():
-            if "head" in name:
-                param.requires_grad = True
-    elif folder_name == "sact_uniSpl_FTlayers_H-FCN":
-        for name, param in model.named_parameters():
-            if any(x in name for x in ["head", "fc_norm"]):
-                param.requires_grad = True
-    elif folder_name == "sact_uniSpl_FTlayers_H-FCN-1B":
+    if "sact_uniSpl_FTlayers_H-FCN-1B" in folder_name:
         for name, param in model.named_parameters():
             if any(x in name for x in ["head", "fc_norm", "blocks.11"]):
                 param.requires_grad = True
-    elif folder_name == "sact_uniSpl_FTlayers_H-FCN-2B":
+    elif "sact_uniSpl_FTlayers_H-FCN-2B" in folder_name:
         for name, param in model.named_parameters():
             if any(x in name for x in ["head", "fc_norm", "blocks.11", "blocks.10"]):
                 param.requires_grad = True
-    elif folder_name == "sact_uniSpl_FTlayers_H-FCN-3B":
+    elif "sact_uniSpl_FTlayers_H-FCN-3B" in folder_name:
         for name, param in model.named_parameters():
             if any(x in name for x in ["head", "fc_norm", "blocks.11", "blocks.10", "blocks.9"]):
                 param.requires_grad = True
-    elif folder_name == "sact_uniSpl_FTlayers_H-FCN-4B":
+    elif "sact_uniSpl_FTlayers_H-FCN-4B" in folder_name:
         for name, param in model.named_parameters():
             if any(x in name for x in ["head", "fc_norm", "blocks.11", "blocks.10", "blocks.9", "blocks.8"]):
                 param.requires_grad = True
-    elif folder_name == "sact_uniSpl_FTlayers_H-FCN-5B":
+    elif "sact_uniSpl_FTlayers_H-FCN-5B" in folder_name:
         for name, param in model.named_parameters():
             if any(x in name for x in ["head", "fc_norm", "blocks.11", "blocks.10", "blocks.9", "blocks.8", "blocks.7"]):
+                param.requires_grad = True
+    elif "sact_uniSpl_FTlayers_H-FCN" in folder_name:
+        for name, param in model.named_parameters():
+            if any(x in name for x in ["head", "fc_norm"]):
+                param.requires_grad = True
+    elif "sact_uniSpl_FTlayers_H" in folder_name:
+        for name, param in model.named_parameters():
+            if "head" in name:
                 param.requires_grad = True
     else:
         for name, param in model.named_parameters():

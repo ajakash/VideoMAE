@@ -427,6 +427,12 @@ def main(args, ds_init):
     # TO NOT DO: Set all layers of model.vit_encoder to require grad
     # and model.box_encoder to not require grad
     # Also update the below if required
+    # if args.output_dir.split("_")[-1] == "testv2":
+    #     ipdb.set_trace()
+    if args.output_dir.split("_")[-1] == "fixPatchEmb":
+        for name, param in model.named_parameters():
+            if "patch_embed" in name:
+                param.requires_grad = False
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
     # print("Model = %s" % str(model))

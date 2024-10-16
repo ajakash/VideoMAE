@@ -404,6 +404,8 @@ def main(args, ds_init):
         print("Using EMA with decay = %.8f" % args.model_ema_decay)
 
     model_without_ddp = model
+    # for name, param in model.named_parameters():
+    #     print(name, param.requires_grad)
     # ipdb.set_trace()
     utils.set_param_requires_grad(model, args.output_dir.split("/")[-1])                    
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
