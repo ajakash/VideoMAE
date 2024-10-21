@@ -26,8 +26,8 @@ OMP_NUM_THREADS=1 CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launc
     --master_port 12321 \
     run_class_finetuning.py \
     --num_workers 10 \
-    --model $3 \
-    --batch_size $4 \
+    --model vit_base_patch16_224 \
+    --batch_size $3 \
     --epochs 150 \
     --num_sample 1 \
     --data_set MOMA_sact_uniSampling \

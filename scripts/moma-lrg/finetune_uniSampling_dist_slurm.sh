@@ -37,13 +37,13 @@ OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=4 \
     --master_port 12320 --nnodes=1  --node_rank=0 --master_addr=127.0.0.1 \
     run_class_finetuning.py \
     --num_workers 10 \
-    --model $3 \
+    --model vit_base_patch16_224 \
     --data_set MOMA_sact_uniSampling \
     --nb_classes 91 \
     --finetune ${MODEL_PATH} \
     --log_dir ${LOG_DIR} \
     --output_dir ${OUTPUT_DIR} \
-    --batch_size $4 \
+    --batch_size $3 \
     --num_sample 1 \
     --input_size 224 \
     --short_side_size 224 \

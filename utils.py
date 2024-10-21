@@ -3,6 +3,7 @@ import os
 import math
 import time
 import json
+import copy
 from collections import defaultdict, deque
 import datetime
 import numpy as np
@@ -634,39 +635,60 @@ class AllGather_multi(torch.autograd.Function):
             None, None,
         )
 
+
+def set_requires_grad_for(model, layer_list):
+    for name, param in model.named_parameters():
+        if any(x in name for x in layer_list):
+            param.requires_grad = True
+
 # Function to set requires_grad for varying number of layers
 def set_param_requires_grad(model, folder_name):
     for name, param in model.named_parameters():
         param.requires_grad = False
     
     if "sact_uniSpl_FTlayers_H-FCN-1B" in folder_name:
-        for name, param in model.named_parameters():
-            if any(x in name for x in ["head", "fc_norm", "blocks.11"]):
-                param.requires_grad = True
+        set_requires_grad_for(model, ["head", "fc_norm", "blocks.11"])
     elif "sact_uniSpl_FTlayers_H-FCN-2B" in folder_name:
-        for name, param in model.named_parameters():
-            if any(x in name for x in ["head", "fc_norm", "blocks.11", "blocks.10"]):
-                param.requires_grad = True
+        set_requires_grad_for(model, ["head", "fc_norm", "blocks.11", "blocks.10"])
     elif "sact_uniSpl_FTlayers_H-FCN-3B" in folder_name:
-        for name, param in model.named_parameters():
-            if any(x in name for x in ["head", "fc_norm", "blocks.11", "blocks.10", "blocks.9"]):
-                param.requires_grad = True
+        set_requires_grad_for(model, ["head", "fc_norm", "blocks.11", "blocks.10", "blocks.9"])
     elif "sact_uniSpl_FTlayers_H-FCN-4B" in folder_name:
-        for name, param in model.named_parameters():
-            if any(x in name for x in ["head", "fc_norm", "blocks.11", "blocks.10", "blocks.9", "blocks.8"]):
-                param.requires_grad = True
+        set_requires_grad_for(model, ["head", "fc_norm", "blocks.11", "blocks.10", "blocks.9", "blocks.8"])
     elif "sact_uniSpl_FTlayers_H-FCN-5B" in folder_name:
-        for name, param in model.named_parameters():
-            if any(x in name for x in ["head", "fc_norm", "blocks.11", "blocks.10", "blocks.9", "blocks.8", "blocks.7"]):
-                param.requires_grad = True
+        set_requires_grad_for(model, ["head", "fc_norm", "blocks.11", "blocks.10", "blocks.9", "blocks.8", "blocks.7"])
     elif "sact_uniSpl_FTlayers_H-FCN" in folder_name:
-        for name, param in model.named_parameters():
-            if any(x in name for x in ["head", "fc_norm"]):
-                param.requires_grad = True
+        set_requires_grad_for(model, ["head", "fc_norm"])
     elif "sact_uniSpl_FTlayers_H" in folder_name:
-        for name, param in model.named_parameters():
-            if "head" in name:
-                param.requires_grad = True
+        set_requires_grad_for(model, ["head"])
     else:
         for name, param in model.named_parameters():
             param.requires_grad = True
+
+
+# Copy block and set linears to zero - Block Expansion
+def expand_blocks(model, block_ids):
+    for id in block_ids:
+        model.blocks[id] = torch.nn.Sequential(model.blocks[id], copy.deepcopy(model.blocks[id]))
+
+        # Set parameters of Linears before identity addition to zero
+        with torch.no_grad():
+            model.blocks[id][1].attn.proj.weight = torch.nn.Parameter(
+                torch.zeros_like(model.blocks[id][1].attn.proj.weight))
+            model.blocks[id][1].attn.proj.bias = torch.nn.Parameter(
+                torch.zeros_like(model.blocks[id][1].attn.proj.bias))
+            model.blocks[id][1].mlp.fc2.weight = torch.nn.Parameter(
+                torch.zeros_like(model.blocks[id][1].mlp.fc2.weight))
+            model.blocks[id][1].mlp.fc2.bias = torch.nn.Parameter(
+                torch.zeros_like(model.blocks[id][1].mlp.fc2.bias))
+
+# Function for block expansion, based on output directory name
+def block_expansion(model, folder_name):
+    if "BExp" in folder_name:
+        for name, param in model.named_parameters():
+            param.requires_grad = False
+
+        block_ids = [int(x) for x in folder_name.split("-")[1:]]
+        block_names = [f"blocks.{x}.1" for x in folder_name.split("-")[1:]]
+
+        expand_blocks(model, block_ids)
+        set_requires_grad_for(model, block_names)

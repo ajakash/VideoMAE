@@ -407,7 +407,11 @@ def main(args, ds_init):
     # for name, param in model.named_parameters():
     #     print(name, param.requires_grad)
     # ipdb.set_trace()
-    utils.set_param_requires_grad(model, args.output_dir.split("/")[-1])                    
+    # Function to FT some layers based on output directory name
+    utils.set_param_requires_grad(model, args.output_dir.split("/")[-1])      
+    # Function for block expansion, based on output directory name
+    utils.block_expansion(model, args.output_dir.split("/")[-1])
+    # ipdb.set_trace()
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
     # print("Model = %s" % str(model_without_ddp))
